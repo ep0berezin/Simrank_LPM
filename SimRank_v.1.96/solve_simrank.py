@@ -118,6 +118,16 @@ def Solve(acc, m_Krylov, rank, k_iter_max, taskname, A, c, solvers, optimize, sh
 			ts = time.time() - ts
 			S["S_altopt"] = S_altopt
 			t["S_altopt"] = ts
+		if (solver == "ALS_CGNR"):
+			notfound = False
+			print(f"Starting ALS CGNR solver with rank={rank}, iterations limit {k_iter_max}  ...")
+			ts = time.time()
+			S_altopt, solutiondata = slv.AltOpt(A_csr, c, rank, slv.ANE, k_iter_max, dir_maxit=30, printout = True)
+			#print(S_odd.shape)
+			ts = time.time() - ts
+			S["S_alscgnr"] = S_altopt
+			t["S_alscgnr"] = ts
+
 			solutiondata_dict["S_altopt"] = solutiondata
 		if (solver == "Optimization_Newton"):
 			notfound = False

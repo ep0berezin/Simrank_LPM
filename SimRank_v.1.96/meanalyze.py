@@ -23,6 +23,7 @@ class results:
 				S = np.load(filename)
 				print(f"Loaded: {filename}")
 				diff = self.S_etalon-S
+				S = np.eye(2) #to zero memory
 				err_Frob = np.linalg.norm(diff, ord='fro')
 				err_Cheb = np.max(np.abs(diff))
 				self.err_Frob_frank.append(err_Frob), self.err_Cheb_frank.append(err_Cheb), self.solution_frank.append(S)
@@ -30,6 +31,8 @@ class results:
 				print(f"File not found for {pattern}")
 				#zeroing maybe a kostyl, but it prevents misleading when not rank-consistent datas.
 				self.err_Frob_frank.append(0.), self.err_Cheb_frank.append(0.), self.solution_frank.append( np.zeros((self.S_etalon.shape[0],self.S_etalon.shape[1])) )
+				
+				
 class normtest():
 	def __init__(self, solvers, k, ranks, taskname, linestyles_dict, legend):
 		self.solvers = solvers
@@ -54,7 +57,7 @@ class normtest():
 		plt.figure()
 		plt.grid()
 		for solver in self.solvers:
-			plt.plot(self.ranks, self.solver_results_dict[solver].err_Cheb_frank, linestyle=self.linestyle[solver], marker = '.')
+			plt.plot(ranks, self.solver_results_dict[solver].err_Cheb_frank, color='black', linestyle=self.linestyle[solver], marker = '.')
 			plt.xlabel(r"Approximation rank $r$")
 			plt.ylabel(r"Chebyshev norm error, $||S-S_{approx}||_C$")
 		plt.legend(self.legend)
@@ -65,7 +68,7 @@ class normtest():
 		plt.figure()
 		plt.grid()
 		for solver in self.solvers:
-			plt.plot(self.ranks, self.solver_results_dict[solver].err_Frob_frank, linestyle=self.linestyle[solver], marker = '.')
+			plt.plot(ranks, self.solver_results_dict[solver].err_Frob_frank, color='black', linestyle=self.linestyle[solver], marker = '.')
 			plt.xlabel(r"Approximation rank $r$")
 			plt.ylabel(r"Frobsnius norm error, $||S-S_{approx}||_F$")
 		plt.legend(self.legend)
@@ -104,7 +107,7 @@ class toptest():
 		plt.figure()
 		plt.grid()
 		for solver in self.solvers:
-			plt.plot(self.ranks, np.array(self.inds_intersec_arrs_dict[solver])/(self.k*self.n), linestyle=self.linestyle[solver], marker = '.')
+			plt.plot(ranks, np.array(self.inds_intersec_arrs_dict[solver])/(self.k*self.n), color='black', linestyle=self.linestyle[solver], marker = '.')
 			plt.xlabel(r"Approximation rank $r$")
 			plt.ylabel(fr"Percentage of elements from top-{self.k} remaind in row")
 		#plt.legend(self.solvers)
@@ -121,14 +124,9 @@ def topsim(k, S):
 
 if __name__=="__main__":
 	taskname = "eumail"
-	ranks = np.arange(100,1000,100)
-	toptest_inst = toptest(["AltOpt","Optimization_Newton","RSVDIters"], 10, ranks, taskname, linestyles_dict={"AltOpt":'--', "Optimization_Newton":'-', "RSVDIters":':',}, legend=["AltOpt", "OptiNewton", "REig"])
+	ranks = np.arange(100,1100,100)
+	toptest_inst = toptest(["AltOpt","Optimization_Newton"], 10, ranks, taskname, linestyles_dict={"AltOpt":'--', "Optimization_Newton":'-'}, legend=["AltOpt", "OptNewt"])
 	toptest_inst()
-	normtest_inst = normtest(["AltOpt","Optimization_Newton","RSVDIters"], 10, ranks, taskname, linestyles_dict={"AltOpt":'--', "Optimization_Newton":'-', "RSVDIters":':'}, legend=["AltOpt", "OptiNewton", "REig"])
+	normtest_inst = normtest(["AltOpt","Optimization_Newton"], 10, ranks, taskname, linestyles_dict={"AltOpt":'--', "Optimization_Newton":'-'}, legend=["AltOpt", "OptNewt"])
 	normtest_inst()
-	#
-	#tag = "AltOpt1"
-	#np.save(f"results/data/{taskname}_AltOpt_toptest_{tag}.npy", toptest_inst.inds_intersec_arrs_dict["AltOpt"])
-	#np.save(f"results/data/{taskname}_AltOpt_normtest_Cheb_{tag}.npy", normtest_inst.solver_results_dict["AltOpt"].err_Cheb_frank)
-	#np.save(f"results/data/{taskname}_AltOpt_normtest_Frob_{tag}.npy", normtest_inst.solver_results_dict["AltOpt"].err_Frob_frank)
 

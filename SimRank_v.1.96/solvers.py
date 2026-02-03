@@ -287,6 +287,11 @@ def ALS_tests(U, V, A, c, dir_maxit, printout): #Alternating least squares solve
 		U = c*ATU@(VtA@Vt_pinv) - c*dmmp.DDD(ATU, VtA, Vt_pinv) + c*sops.offATA@Vt_pinv
 		print(f"Cheb norm || U^(k+1) - U^(k) ||_C = {np.max(np.abs(U-U_prev))} ")
 	return U,Vt.T
+	
+
+def cwl2(X):
+	norms = np.linalg.norm(X, axis=0)
+	return(np.max(norms))
 
 def ALS(U, V, A, c, dir_maxit, printout): #Alternating least squares solver without n x n matrices.
 	#NOTE: computation of pinv as (A.TA)^-1 A.T is faster but numerically unstable
@@ -299,13 +304,22 @@ def ALS(U, V, A, c, dir_maxit, printout): #Alternating least squares solver with
 	for iter_v in range(dir_maxit):
 		if printout: print(f"V direction iteration {iter_v}")
 		VtA = Vt@sops.A
+		#Vprev=Vt ###
 		Vt = c*(U_pinv@ATU)@VtA - c*mdmp.DDD(U_pinv, ATU, VtA) + c*U_pinv@sops.offATA
+		#print(f"||V_new - V||_F = {np.linalg.norm(Vt-Vprev)}") ###
+		#print(f"||U||_C * ||U^+||_C = {np.max(np.abs(U)) * np.max(np.abs(U_pinv))}") ###
+		print(f"c(V.T) = {cwl2(Vt)}")
 	VtA = Vt@sops.A
 	Vt_pinv = np.linalg.pinv(Vt)
 	for iter_u in range(dir_maxit):
 		if printout: print(f"U direction iteration {iter_u}")
 		ATU = sops.AT@U
+		#Uprev = U
 		U = c*ATU@(VtA@Vt_pinv) - c*dmmp.DDD(ATU, VtA, Vt_pinv) + c*sops.offATA@Vt_pinv
+		#print(f"||U_new - U||_F = {np.linalg.norm(U-Uprev)}") ###
+		#print(f"||Vt||_C * ||Vt^+||_C = {np.max(np.abs(Vt)) * np.max(np.abs(Vt_pinv))}") ###
+		print(f"c(U.T) = {cwl2(U.T)}")
+	print(f"c(U)c(V.T) = {cwl2(U)*cwl2(Vt)}")
 	return U,Vt.T
 
 def ANE(U, V, A, c, dir_maxit, printout): #Alternating normal equations

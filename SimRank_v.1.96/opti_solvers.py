@@ -42,6 +42,7 @@ class simrank_ops:
 	def gradf(self, U): #grad(f)
 		return 4.*self.F_conj(self.F(U@U.T)-self.B)@U
 	def dgradf(self, U, dX): #differential of grad(f) at U from arg differential dX ; d(grad(f)(U)[dX] = (grad(f))'(U)[dX] = J(U)[dX]
+		print(f"grad shape: {(4.*( self.F_conj(self.F(dX@U.T+U@(dX).T))@U + self.F_conj(self.F(U@U.T)-self.B)@dX )).shape} ")
 		return 4.*( self.F_conj(self.F(dX@U.T+U@(dX).T))@U + self.F_conj(self.F(U@U.T)-self.B)@dX )
 	def dgradf_vectorized(self, U, dX): #(vectorized for scipy iterative solvers) differential of grad(f) 
 		return (4.*( self.F_conj(self.F(dX.reshape((self.n,self.r), order = 'F')@U.T+U@(dX.reshape((self.n,self.r), order = 'F')).T))@U + self.F_conj(self.F(U@U.T)-self.B)@dX.reshape((self.n,self.r), order = 'F') ) ).reshape((self.n*self.r,1), order = 'F')
@@ -132,6 +133,7 @@ class simrank_ops_optimized:
 		return self.off(X) - self.c*self.off(self.A@self.off(X)@self.A.T)
 	def gradf(self, U): #grad(f)
 		res = 4.*( self.ffmp(U,U.T,U) - self.termB@U )
+		print(f"grad shape = {res.shape}")
 		return res
 	def dgradf_vectorized(self, U, dX):
 		#differential of grad(f) at U from arg differential dX ; d(grad(f)(U)[dX] = (grad(f))'(U)[dX] = J(U)[dX] 
@@ -152,7 +154,7 @@ class simrank_ops_another(simrank_ops): #with operators to solve with S = U@U.T
 		return X - self.c*self.off(self.A.T@X@self.A)
 	def F_conj(self, X):
 		return X - self.c*self.A@self.off(X)@self.A.T
-
+#NOTE: atol --> to 28.11.2025. This COULD lead to different behaviour!
 class GMRES_scipy:
 	def __init__(self, matvec, b, x_0, m_Krylov, maxiter, eps=1e-10, printout=True):
 		self.LinOp = scsp.linalg.LinearOperator((b.shape[0],b.shape[0]), matvec = matvec)
@@ -164,7 +166,7 @@ class GMRES_scipy:
 		self.printout = printout
 		self.cb = lambda res : print(f"GMRES relative residual = {res}")  if printout else None
 	def __call__(self):
-		u, _ = scsp.linalg.gmres(self.LinOp, self.b, x0=self.x_0, atol=self.eps, restart=self.m, maxiter=self.maxiter, M=None, callback=self.cb, callback_type='pr_norm') 
+		u, _ = scsp.linalg.gmres(self.LinOp, self.b, x0=self.x_0, tol=self.eps, restart=self.m, maxiter=self.maxiter, M=None, callback=self.cb, callback_type='pr_norm') 
 		return u
 
 class CG_scipy:
@@ -178,7 +180,7 @@ class CG_scipy:
 		self.printout = printout
 		self.cb = lambda res : print(f"GMRES relative residual = {res}")  if printout else None
 	def __call__(self):
-		u, _ = scsp.linalg.cg(self.LinOp, self.b, x0=self.x_0, atol=self.eps, maxiter=self.m, M=None, callback=self.cb) 
+		u, _ = scsp.linalg.cg(self.LinOp, self.b, x0=self.x_0, tol=self.eps, maxiter=self.m, M=None, callback=self.cb) 
 		return u
 
 class GMRES_custom:
@@ -221,6 +223,7 @@ def Newton(A, c, r, maxiter, gmres_restarts, m_Krylov, solver, stagstop = 1e-5, 
 		dgradf_vec = lambda X : sops.dgradf_vectorized(U, X)
 		st = time.time()
 		U -= inverse_matvec(dgradf_vec, sops.gradf(U), m_Krylov, gmres_restarts, solver, printout=False).reshape((n,r), order = 'F')
+		print(f"U shape: {U.shape}")
 		print(f"Newton step time = {time.time()-st}")
 		f_val = sops.f(U@U.T)
 		iterdata(f_val)
