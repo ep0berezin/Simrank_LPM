@@ -8,7 +8,8 @@ import solve_simrank as solvesim
 import json
 
 def launch(args):
-	dataset = importlib.import_module(args["taskname"])
+	path = f"dataset_loaders.{args['taskname']}"
+	dataset = importlib.import_module(path)
 	A = dataset.ObtainMatrix()
 	args.update({"A" : A})
 	S = solvesim.Solve(**args)
