@@ -7,21 +7,20 @@ dateformat = "%Y-%m-%d-%H-%M-%S"
 path = "results/solutions"
 
 
-def getsolution(taskname, ranks, solvers):
+def getsolution(taskname, ranks, solver, maxiter):
 	args = {
 	"acc":1e-5,
 	"m_Krylov": 15, 
 	"rank": 200, 
-	"k_iter_max": 100, 
+	"k_iter_max": maxiter, 
 	"taskname": taskname, 
 	"c": 0.8, 
-	"solvers": solvers,  
-	"optimize" : False, 
-	"showfig": False}
+	"solver": solver,  
+	"optimize" : True}
 	#args = sm.load_args(sm.proc_args().argsfrom)
 	for rank in ranks:
 		args['rank'] = rank
-		S, _, _ = sm.launch(args)
+		S = sm.launch(args)
 		solvers = args['solvers']
 		for solver in solvers:
 			np.save(
@@ -37,9 +36,11 @@ if __name__ == "__main__":
 	parser.add_argument("-tn", "--taskname", help="specify task name, for options see simrank_main")
 	parser.add_argument("-sl", "--solver", help="specify solver, for options see simrank_main")
 	parser.add_argument("-rk", "--ranks", help="Usage: --ranks start_rank,end_rank,rank_step (end rank is as end of open interval)")
+	parser.add_argument("-it", "--maxiter", help = "Specify maxiter")
 	clargs = parser.parse_args()
 	solver = clargs.solver
 	taskname = clargs.taskname
 	ranks_ses = np.array(clargs.ranks.split(',')).astype(int)
-	getsolution(taskname, np.arange(ranks_ses[0], ranks_ses[1], ranks_ses[2]), [solver])
+	maxiter = int(clargs.maxiter)
+	getsolution(taskname, np.arange(ranks_ses[0], ranks_ses[1], ranks_ses[2]), solver, maxiter)
 

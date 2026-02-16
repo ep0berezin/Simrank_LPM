@@ -11,8 +11,8 @@ def launch(args):
 	dataset = importlib.import_module(args["taskname"])
 	A = dataset.ObtainMatrix()
 	args.update({"A" : A})
-	S, err_Frob, err_Cheb = solvesim.Solve(**args)
-	return S, err_Frob, err_Cheb
+	S = solvesim.Solve(**args)
+	return S
 
 def load_args(fname):
 	f = open(f"args/{fname}")
@@ -31,7 +31,7 @@ if __name__=="__main__":
 		print("Please use simrank_main.py -h to show help.")
 		sys.exit(1)
 	clargs = proc_args() 
-	args_py = {"acc":1e-5, "m_Krylov": 15, "rank": 50, "k_iter_max": 100, "taskname": "metro", "c": 0.8, "solvers":["Optimization_Newton", "Compare"], "optimize" : True, "showfig": True}
+	args_py = {"acc":1e-5, "m_Krylov": 15, "rank": 50, "k_iter_max": 100, "taskname": "metro", "c": 0.8, "solver": "QMin_Newton", "optimize" : True}
 	if clargs.argsfrom != "py":
 		launch(load_args(clargs.argsfrom))
 	if clargs.argsfrom == "py":

@@ -3,19 +3,6 @@ import scipy.sparse as scsp
 import time
 import solvers as slv
 
-class iterations_data:
-	def __init__(self):
-		self.iterations = []
-		self.funcvals = []
-		self.k_iter = 0
-	def __call__(self, f, printout = True):
-		if printout: print(f"Iteration: {self.k_iter}")
-		self.k_iter+=1
-		self.iterations.append(self.k_iter)
-		self.funcvals.append(f)
-		if printout: print('Current f(U) value =', f)
-		return f
-
 class simrank_ops:
 	def __init__(self, A, c, r):
 		self.c = c
@@ -33,19 +20,18 @@ class simrank_ops:
 		return Xcopy
 	def mat_inner(self, A, B):
 		return np.trace(B.T@A)
-	def f(self, X): #f = ||F(X)-B||_F^2
-		return np.linalg.norm((self.F(X)-self.B), ord = 'fro')**2
-	def F(self, X):
+	def f(self, X): #f = ||Phi(X)-B||_F^2
+		return np.linalg.norm((self.Phi(X)-self.B), ord = 'fro')**2
+	def Phi(self, X):
 		return self.off(X) - self.c*self.off(self.A.T@self.off(X)@self.A)
-	def F_conj(self, X):
+	def Phi_conj(self, X):
 		return self.off(X) - self.c*self.off(self.A@self.off(X)@self.A.T)
 	def gradf(self, U): #grad(f)
-		return 4.*self.F_conj(self.F(U@U.T)-self.B)@U
+		return 4.*self.Phi_conj(self.Phi(U@U.T)-self.B)@U
 	def dgradf(self, U, dX): #differential of grad(f) at U from arg differential dX ; d(grad(f)(U)[dX] = (grad(f))'(U)[dX] = J(U)[dX]
-		print(f"grad shape: {(4.*( self.F_conj(self.F(dX@U.T+U@(dX).T))@U + self.F_conj(self.F(U@U.T)-self.B)@dX )).shape} ")
-		return 4.*( self.F_conj(self.F(dX@U.T+U@(dX).T))@U + self.F_conj(self.F(U@U.T)-self.B)@dX )
+		return 4.*( self.Phi_conj(self.Phi(dX@U.T+U@(dX).T))@U + self.Phi_conj(self.Phi(U@U.T)-self.B)@dX )
 	def dgradf_vectorized(self, U, dX): #(vectorized for scipy iterative solvers) differential of grad(f) 
-		return (4.*( self.F_conj(self.F(dX.reshape((self.n,self.r), order = 'F')@U.T+U@(dX.reshape((self.n,self.r), order = 'F')).T))@U + self.F_conj(self.F(U@U.T)-self.B)@dX.reshape((self.n,self.r), order = 'F') ) ).reshape((self.n*self.r,1), order = 'F')
+		return (4.*( self.Phi_conj(self.Phi(dX.reshape((self.n,self.r), order = 'F')@U.T+U@(dX.reshape((self.n,self.r), order = 'F')).T))@U + self.Phi_conj(self.Phi(U@U.T)-self.B)@dX.reshape((self.n,self.r), order = 'F') ) ).reshape((self.n*self.r,1), order = 'F')
 
 class diagmatmatprod:
 	#method name corresponds with arguments types
@@ -79,7 +65,7 @@ class simrank_ops_optimized:
 		self.ATA = A.T@A
 		self.B = c*self.off(self.ATA)
 		self.r = r
-		self.termB = self.F_conj(self.B)
+		self.termB = self.Phi_conj(self.B)
 		self.dmmp = diagmatmatprod()
 	def off(self, X):
 		Xcopy = X.copy()
@@ -125,15 +111,14 @@ class simrank_ops_optimized:
 		
 		res = T1-c*T2+c**2*T3
 		return res
-	def f(self, X): #f = ||F(X)-B||_F^2
-		return np.linalg.norm((self.F(X)-self.B), ord = 'fro')**2
-	def F(self, X):
+	def f(self, X): #f = ||Phi(X)-B||_F^2
+		return np.linalg.norm((self.Phi(X)-self.B), ord = 'fro')**2
+	def Phi(self, X):
 		return self.off(X) - self.c*self.off(self.A.T@self.off(X)@self.A)
-	def F_conj(self, X):
+	def Phi_conj(self, X):
 		return self.off(X) - self.c*self.off(self.A@self.off(X)@self.A.T)
 	def gradf(self, U): #grad(f)
 		res = 4.*( self.ffmp(U,U.T,U) - self.termB@U )
-		print(f"grad shape = {res.shape}")
 		return res
 	def dgradf_vectorized(self, U, dX):
 		#differential of grad(f) at U from arg differential dX ; d(grad(f)(U)[dX] = (grad(f))'(U)[dX] = J(U)[dX] 
@@ -148,11 +133,11 @@ class simrank_ops_another(simrank_ops): #with operators to solve with S = U@U.T
 	def __init__(self, A, c, r):
 		super().__init__(A, c, r)
 		self.B = np.eye(self.n)
-	def f(self, X): #f = ||F(X)-B||_F^2
-		return np.linalg.norm((self.F(X)-self.B), ord = 'fro')**2
-	def F(self, X):
+	def f(self, X): #f = ||Phi(X)-B||_F^2
+		return np.linalg.norm((self.Phi(X)-self.B), ord = 'fro')**2
+	def Phi(self, X):
 		return X - self.c*self.off(self.A.T@X@self.A)
-	def F_conj(self, X):
+	def Phi_conj(self, X):
 		return X - self.c*self.A@self.off(X)@self.A.T
 #NOTE: atol --> to 28.11.2025. This COULD lead to different behaviour!
 class GMRES_scipy:
@@ -208,8 +193,18 @@ def inverse_matvec(LinOp, x, m_Krylov, restarts, solver, eps=1e-10, printout=Tru
 	if printout : print(f"Finished inverse matvec for {time.time()-st} s.")
 	return u
 
-def Newton(A, c, r, maxiter, gmres_restarts, m_Krylov, solver, stagstop = 1e-5, optimize = False, printout = True):
-	iterdata = iterations_data()
+def Newton(A, c, r, maxiter, gmres_restarts, m_Krylov, solver, stagstop = 1e-5, eps_f = 1e-15, eps_shift = 1e-15, optimize = False, compute_functional = True, printout = True):
+	
+	iterdata_vals_types = ["iteration", "U_shift"]
+	if compute_functional : 
+		iterdata_vals_types.append("f(U)_function")
+	iterdata = slv.iterations_data(iterdata_vals_types)
+	
+	save_shift = lambda val : iterdata.saveval(val, "U_shift", printout)
+	save_iteration = lambda iteration : iterdata.saveval(iteration, "iteration", printout)
+	if compute_functional : 
+		save_funcval = lambda val : iterdata.saveval(val, "f(U)_function", printout)
+	
 	n, _ = A.shape
 	np.random.seed(42)
 	U = np.random.randn(n,r)
@@ -217,23 +212,32 @@ def Newton(A, c, r, maxiter, gmres_restarts, m_Krylov, solver, stagstop = 1e-5, 
 		sops = simrank_ops_optimized(A, c, r)
 	else:
 		sops = simrank_ops(A, c, r)
-	f_val_prev = sops.f(U@U.T)
+	if compute_functional : f_val_prev = sops.f(U@U.T)
 	st = time.time()
 	for k in range(maxiter):
+		save_iteration(k)
 		dgradf_vec = lambda X : sops.dgradf_vectorized(U, X)
 		st = time.time()
-		U -= inverse_matvec(dgradf_vec, sops.gradf(U), m_Krylov, gmres_restarts, solver, printout=False).reshape((n,r), order = 'F')
-		print(f"U shape: {U.shape}")
-		print(f"Newton step time = {time.time()-st}")
-		f_val = sops.f(U@U.T)
-		iterdata(f_val)
-		if (np.abs(f_val - f_val_prev)) < stagstop:
-			print(f"Stopped by f(U) stagnation (| f - f_prev | < {stagstop})")
-			break
-		f_val_prev = f_val
-	elapsed = time.time()-st
-	solutiondata = [iterdata.iterations, iterdata.funcvals, elapsed]
-	return np.eye(n) + sops.off(U@U.T), solutiondata
+		DeltaU = inverse_matvec(dgradf_vec, sops.gradf(U), m_Krylov, gmres_restarts, solver, printout=False).reshape((n,r), order = 'F')
+		DeltaU_norm = np.linalg.norm(DeltaU, ord = "fro")
+		save_shift(DeltaU_norm)
+		U -= DeltaU
+		if printout : print(f"Newton step time = {time.time()-st}")
+		if DeltaU_norm < eps_shift :
+			if printout : print(f"Stopped by Delta(U) value < {eps_shift})")
+			break 
+		if compute_functional:
+			f_val = sops.f(U@U.T)
+			save_funcval(f_val)
+			if (np.abs(f_val - f_val_prev)) < stagstop:
+				if printout : print(f"Stopped by f(U) stagnation (| f - f_prev | < {stagstop})")
+				break
+			if f_val < eps_f:
+				if printout : print(f"Stopped by f(U) value < {eps_f})")
+				break
+			f_val_prev = f_val
+	iterdata.elapsed = time.time()-st
+	return U, iterdata
 #---
 
 #--- Gradient method with step splitting---
@@ -253,17 +257,20 @@ def getalpha(f, gradf, inner, x, tau, maxiter=100, printout = True): #step split
 	return alpha
 
 def Gradmethod(A, c, r, maxiter, printout = True):
-	iterdata = iterations_data()
+	iterdata_vals_types = ["iteration", "f(U)_function"]
+	iterdata = slv.iterations_data(iterdata_vals_types)
+	save_funcval = lambda val : iterdata.saveval(val, "f(U)_function", printout)
+	save_iteration = lambda iteration : iterdata.saveval(iteration, "iteration", printout)
 	n, _ = A.shape
 	np.random.seed(42)
 	U = np.random.randn(n,r)
 	sops = simrank_ops(A,c,r)
 	st = time.time()
 	for k in range(maxiter):
-		iterdata(sops.f(U@U.T))
+		save_iteration(k)
+		save_funcval(sops.f(U@U.T))
 		alpha = getalpha(sops.f, sops.gradf, sops.mat_inner, U, tau=0.5)
 		U = U - alpha*sops.gradf(U)
-	elapsed = time.time()-st
-	solutiondata = [iterdata.iterations, iterdata.funcvals, elapsed]
-	return np.eye(n) + sops.off(U@U.T), solutiondata 
+	iterdata.elapsed = time.time()-st
+	return np.eye(n) + sops.off(U@U.T), iterdata
 #---

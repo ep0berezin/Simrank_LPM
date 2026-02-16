@@ -54,9 +54,9 @@ class normtest():
 		plt.figure()
 		plt.grid()
 		for solver in self.solvers:
-			plt.plot(self.ranks, self.solver_results_dict[solver].err_Cheb_frank, linestyle=self.linestyle[solver], marker = '.')
+			plt.plot(self.ranks, self.solver_results_dict[solver].err_Cheb_frank, linestyle=self.linestyle[solver], color="black", marker = '.')
 			plt.xlabel(r"Approximation rank $r$")
-			plt.ylabel(r"Chebyshev norm error, $||S-S_{approx}||_C$")
+			plt.ylabel(r"Chebyshev norm error, $\|S-\tilde{S} \|_C$")
 		plt.legend(self.legend)
 		plt.savefig(f"plotCheb_{self.taskname}.pdf")
 		print("Cheb err plot saved.")
@@ -65,9 +65,9 @@ class normtest():
 		plt.figure()
 		plt.grid()
 		for solver in self.solvers:
-			plt.plot(self.ranks, self.solver_results_dict[solver].err_Frob_frank, linestyle=self.linestyle[solver], marker = '.')
+			plt.plot(self.ranks, self.solver_results_dict[solver].err_Frob_frank, linestyle=self.linestyle[solver], color="black", marker = '.')
 			plt.xlabel(r"Approximation rank $r$")
-			plt.ylabel(r"Frobsnius norm error, $||S-S_{approx}||_F$")
+			plt.ylabel(r"Frobenius norm error, $\|S-\tilde{S} \|_F$")
 		plt.legend(self.legend)
 		plt.savefig(f"plotFrob_{self.taskname}.pdf")
 		print("Frob err plot saved.")
@@ -104,9 +104,9 @@ class toptest():
 		plt.figure()
 		plt.grid()
 		for solver in self.solvers:
-			plt.plot(self.ranks, np.array(self.inds_intersec_arrs_dict[solver])/(self.k*self.n), linestyle=self.linestyle[solver], marker = '.')
+			plt.plot(self.ranks, np.array(self.inds_intersec_arrs_dict[solver])/(self.k*self.n), linestyle=self.linestyle[solver], color="black", marker = '.')
 			plt.xlabel(r"Approximation rank $r$")
-			plt.ylabel(fr"Percentage of elements from top-{self.k} remaind in row")
+			plt.ylabel(fr"$\Psi({self.k})$")
 		#plt.legend(self.solvers)
 		plt.legend(self.legend)
 		plt.savefig(f"plot_top_{self.taskname}.pdf")
@@ -122,9 +122,9 @@ def topsim(k, S):
 if __name__=="__main__":
 	taskname = "eumail"
 	ranks = np.arange(100,1000,100)
-	toptest_inst = toptest(["AltOpt","Optimization_Newton","RSVDIters"], 10, ranks, taskname, linestyles_dict={"AltOpt":'--', "Optimization_Newton":'-', "RSVDIters":':',}, legend=["AltOpt", "OptiNewton", "REig"])
+	toptest_inst = toptest(["AltMin_LSFP","QMin_Newton","RSVDIters"], 10, ranks, taskname, linestyles_dict={"AltMin_LSFP":'--', "QMin_Newton":'-', "RSVDIters":':',}, legend=["AltMin", "QMin", "RSVD"])
 	toptest_inst()
-	normtest_inst = normtest(["AltOpt","Optimization_Newton","RSVDIters"], 10, ranks, taskname, linestyles_dict={"AltOpt":'--', "Optimization_Newton":'-', "RSVDIters":':'}, legend=["AltOpt", "OptiNewton", "REig"])
+	normtest_inst = normtest(["AltMin_LSFP","QMin_Newton","RSVDIters"], 10, ranks, taskname, linestyles_dict={"AltMin_LSFP":'--', "QMin_Newton":'-', "RSVDIters":':'}, legend=["AltMin", "QMin", "RSVD"])
 	normtest_inst()
 	#
 	#tag = "AltOpt1"

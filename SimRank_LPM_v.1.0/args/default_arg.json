@@ -1,0 +1,10 @@
+{
+	"acc":1e-5,
+	"m_Krylov": 5,
+	"rank": 100,
+	"k_iter_max": 100,
+	"taskname": "metro",
+	"c": 0.8,
+	"solver": "QMin_Newton",
+	"optimize" : true
+}

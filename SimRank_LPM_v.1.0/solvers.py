@@ -5,42 +5,39 @@ import scipy.sparse as scsp
 import sys
 import time
 
-
 class iterations_data:
-	def __init__(self):
-		self.iterations = []
-		self.residuals = []
-		self.k_iter = 0
-	def __call__(self, r, printout = True):
-		if printout: print(f"Iteration: {self.k_iter}")
-		self.k_iter+=1
-		self.iterations.append(self.k_iter)
-		self.residuals.append(r)
-		if printout: print('Current relative residual =', r)
-		return r
-		
+	def __init__(self, valtypes):
+		self.values = { key : [] for key in valtypes }
+		self.elapsed = 0.
+	def saveval(self, val, valtype, printout = True):
+		if printout : print(f"{valtype}: {val}")
+		self.values[valtype].append(val)
+		return val
 
 #---Fixed Point---
 
-def SimpleIter(LinOp, tau, x_0, b, k_max, printout, eps = 1e-13):
+def FixedPointIter(LinOp, tau, x_0, b, k_max, printout, eps = 1e-13):
 	N = x_0.shape[0] #N = n^2
 	s = x_0
-	iterdata = iterations_data()
+	iterdata_vals_types = ["iteration", "relative_residual"]
+	iterdata = iterations_data(iterdata_vals_types)
+	save_residual = lambda val : iterdata.saveval(val, "relative_residual", printout)
+	save_iteration = lambda iteration : iterdata.saveval(iteration, "iteration", printout)
 	st = time.time()
 	for k in range(k_max):
 		s_prev = s
 		s = (b-LinOp(s))*tau+s
 		r_norm2 = np.linalg.norm(s-s_prev, ord = 2)
 		relres = r_norm2/np.linalg.norm(b, ord = 2)
-		iterdata(relres, printout)
+		save_iteration(k)
+		save_residual(relres)
 		if (relres  < eps):
 			break
 	et = time.time()
-	elapsed = et - st
+	iterdata.elapsed = et - st
 	if printout: print(f"Average iteration time: {elapsed/iterdata.iterations[-1]} s")
-	if printout: print(f"Elapsed: {elapsed} s")
-	solutiondata = [iterdata.iterations, iterdata.residuals, elapsed]
-	return s, solutiondata
+	if printout: print(f"Elapsed: {iterdata.elapsed} s")
+	return s, iterdata
 #---
 
 
@@ -82,8 +79,14 @@ def GMRES_m(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 	r = b - LinOp(x_0)
 	r_norm2 = np.linalg.norm(r, ord = 2)
 	relres = r_norm2/np.linalg.norm(b, ord = 2)
-	iterdata = iterations_data()
-	iterdata(relres, printout)
+	iterdata_vals_types = ["iteration", "relative_residual", "restart"]
+	iterdata = iterations_data(iterdata_vals_types)
+	save_residual = lambda val : iterdata.saveval(val, "relative_residual", printout)
+	save_iteration = lambda iteration : iterdata.saveval(iteration, "iteration", printout)
+	save_restart = lambda restart: iterdata.saveval(restart, "restart", printout)
+	save_iteration(0)
+	save_restart(0)
+	save_residual(relres)
 	st = time.time()
 	x = x_0
 	break_outer = False
@@ -97,7 +100,7 @@ def GMRES_m(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 		V_list = [np.zeros(N)] #Stores columns of V matrix
 		V_list[0] = r.reshape(-1, order='F')/beta
 		H_list = [np.zeros(m_Krylov)] #Stores rows of Hessenberg matrix
-		
+		save_restart(k)
 		for m in range(1,m_Krylov+1):
 			st_iter = time.time()
 			V_list.append(np.zeros(N)) #Reserving space for vector (column of V) v_{j+1}
@@ -115,7 +118,8 @@ def GMRES_m(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 			if printout: print("Projection step time:", time.time()-st_proj)
 			r_norm2_inner = np.linalg.norm(b-LinOp(x), ord = 2)
 			relres_inner = r_norm2_inner/np.linalg.norm(b, ord = 2)
-			iterdata(relres_inner, printout) #rel residual
+			save_iteration(k*m_Krylov + m)
+			save_residual(relres_inner) #rel residual
 			if (relres_inner < eps):
 				break_outer = True
 				break
@@ -125,30 +129,36 @@ def GMRES_m(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 		et_restart = time.time()
 		if printout: print("Restart time:", et_restart - st_restart)
 	et = time.time()
-	elapsed = et - st
-	if printout: print(f"Average iteration time: {elapsed/iterdata.iterations[-1]} s")
-	if printout: print(f"GMRES(m) time: {elapsed} s")
-	solutiondata = [iterdata.iterations, iterdata.residuals, elapsed]
-	return x, solutiondata
+	iterdata.elapsed = et - st
+	if printout: print(f"Average iteration time: {elapsed/iterdata.values['iteration'][-1]} s")
+	if printout: print(f"GMRES(m) time: {iterdata.elapsed} s")
+	return x, iterdata
 #---
 
 #---GMRES SciPy ver---
 
+def GMRES_scipy_callback(relres, iterdata, printout):
+	iteration = len(iterdata["relative_residual"])
+	iterdata.saveval(iteration, "iteration", printout)
+	iterdata.saveval(relres, "relative_residual", printout) 
+	return relres
+
 def GMRES_scipy(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 	N = x_0.shape[0] #N=n^2
-	iterdata = iterations_data()
+	iterdata_vals_types = ["iteration", "relative_residual"]
+	iterdata = iterations_data(iterdata_vals_types)
+	save_residual = lambda val : GMRES_scipy_callback(val, iterdata, printout)
 	r = b - LinOp(x_0) #initial residual
 	iterdata(np.linalg.norm(r, ord = 2)/np.linalg.norm(b, ord = 2), printout)
 	G = scsp.linalg.LinearOperator((N,N), matvec = LinOp)
 	st = time.time()
-	s, data = scsp.linalg.gmres(G, b, x0=x_0, atol=eps, restart=m_Krylov, maxiter=None, M=None, callback=iterdata, callback_type='legacy')
+	s, data = scsp.linalg.gmres(G, b, x0=x_0, atol=eps, restart=m_Krylov, maxiter=None, M=None, callback=save_residual, callback_type='legacy')
 	et = time.time()
-	elapsed = et - st
+	iterdata.elapsed = et - st
 	if printout: print("Average iteration time:", elapsed/iterdata.iterations[-1])
-	if printout: print("Elapsed:", elapsed)
+	if printout: print("Elapsed:", iterdata.elapsed)
 	if printout: print("Solution:", s)
-	solutiondata = [iterdata.iterations, iterdata.residuals, elapsed]
-	return s, solutiondata
+	return s, iterdata
 #---
 
 #--- CGNR ---
@@ -183,7 +193,7 @@ class simrank_ops:
 		self.AT = A.T.tocsr()
 		self.n = A.shape[1]
 		self.ATA = A.T@A
-		self.offATA = self.off(self.ATA)
+		self.B = c*self.off(self.ATA)
 	def off(self, X):
 		Xcopy = X.copy()
 		if scsp.issparse(Xcopy):
@@ -193,22 +203,11 @@ class simrank_ops:
 		return Xcopy
 	def mat_inner(self, A,B):
 		return np.trace(B.T@A)
-	def F_hat(self, Y):
-		return Y - self.c*self.off(self.A.T@Y@self.A)
-	def F_hat_conj(self, Y):
-		return Y - self.c*self.A@self.off(Y)@self.A.T
-	def F_UV(self, U, V):
-		return self.c*self.off((self.A.T@U)@(V.T@self.A))+self.c*self.off(self.ATA)
-
-	def F_hat_U(self, Y, U):
-		return U@Y - self.c*self.off((self.A.T@U)@(Y@self.A))
-	def F_hat_U_conj(self, Y, U):
-		return U.T@Y - self.c*( (U.T@self.A)@(self.off(Y)@self.A.T) )
-
-	def F_hat_Vt(self, Y, Vt):
-		return Y@Vt - self.c*self.off((self.A.T@Y)@(Vt@self.A))
-	def F_hat_Vt_conj(self, Y, Vt):
-		return Y@Vt.T-self.c*( (self.A@self.off(Y))@(self.A.T@Vt.T) )
+	def AltMin_K_operator(self, Y, Ypinv, X, mdmp):
+		ATY = self.A.T@Y # n x r
+		XTA = X.T@self.A #r x n
+		result = self.c * ( Ypinv @ ATY ) @ XTA - self.c * mdmp.DDD(Ypinv, ATY, XTA)
+		return result
 
 class diagmatmatprod:
 	#method name corresponds with arguments types
@@ -254,107 +253,39 @@ class matdiagmatprod:
 		dotp = np.asarray( np.sum(X.multiply(Y.T), axis=1) )
 		return ( Z_copy.T.multiply(dotp.reshape((X.shape[0],1))) ).T.tocsr()
 
-def ALS_tests(U, V, A, c, dir_maxit, printout): #Alternating least squares solver without n x n matrices.
+def LSFP(U, V, A, c, dir_maxit, printout): #Least Squares Fixed-Point iterations solver without n x n matrices.
 	#NOTE: computation of pinv as (A.TA)^-1 A.T is faster but numerically unstable
 	sops = simrank_ops(A, c)
-	dmmp = diagmatmatprod()
 	mdmp = matdiagmatprod()
 	U_pinv = np.linalg.pinv(U)
-	print(f"U pinv || U^+ ||_C = {np.max(np.abs(U_pinv))} ")
-	Usvd, sigma, Vsvd = np.linalg.svd(U, full_matrices="False")
-	#print(f"U sigma = \n{sigma}")
-	print(f"U 1/sigma || * ||_C = \n{np.max(np.abs(1./sigma))}")
-	ATU = sops.AT@U
-	Vt = V.T
-	for iter_v in range(dir_maxit):
+	K_U = lambda X : sops.AltMin_K_operator(U, U_pinv, X, mdmp)
+	for iter_v in range(dir_maxit): #U fixed
 		if printout: print(f"V direction iteration {iter_v}")
-		VtA = Vt@sops.A
-		Vt_prev = Vt
-		Vt = c*(U_pinv@ATU)@VtA - c*mdmp.DDD(U_pinv, ATU, VtA) + c*U_pinv@sops.offATA
-		print(f"Cheb norm || V^(k+1) - V^(k) ||_C = {np.max(np.abs(Vt-Vt_prev))} ")
-	VtA = Vt@sops.A
-	Vt_pinv = np.linalg.pinv(Vt)
-
-	print(f"V pinv || V^+ ||_C = {np.max(np.abs(Vt_pinv))} ")
-	Usvd, sigma, Vsvd = np.linalg.svd(Vt, full_matrices="False")
-	#print(f"Vt sigma = \n{sigma}")
-	print(f"Vt 1/sigma || * ||_C = \n{np.max(np.abs(1./sigma))}")
-
+		V = ( K_U(V) + U_pinv@sops.B ).T
+	V_pinv = np.linalg.pinv(V)
+	K_V = lambda X : sops.AltMin_K_operator(V, V_pinv, X, mdmp)
 	for iter_u in range(dir_maxit):
 		if printout: print(f"U direction iteration {iter_u}")
-		ATU = sops.AT@U
-		U_prev = U
-		U = c*ATU@(VtA@Vt_pinv) - c*dmmp.DDD(ATU, VtA, Vt_pinv) + c*sops.offATA@Vt_pinv
-		print(f"Cheb norm || U^(k+1) - U^(k) ||_C = {np.max(np.abs(U-U_prev))} ")
-	return U,Vt.T
+		U = ( K_V(U) +  V_pinv@sops.B.T ).T
+	return U,V
+
+def AltMin(A, c, r, solver, maxiter=100, dir_maxit=1, eps_fro = 1e-15, eps_cheb = 1e-15, compute_full_matrix= False, printout = False): #Main alternating optimiztion function.
+
+	iterdata_vals_types = ["iteration", "AltMin_V_difference_Frobenius", "AltMin_U_difference_Frobenius"]
+	if compute_full_matrix : 
+		iterdata_vals_types.append("AltMin _U@V.T_difference_Frobenius")
+	iterdata = iterations_data(iterdata_vals_types)
 	
-
-def cwl2(X):
-	norms = np.linalg.norm(X, axis=0)
-	return(np.max(norms))
-
-def ALS(U, V, A, c, dir_maxit, printout): #Alternating least squares solver without n x n matrices.
-	#NOTE: computation of pinv as (A.TA)^-1 A.T is faster but numerically unstable
-	sops = simrank_ops(A, c)
-	dmmp = diagmatmatprod()
-	mdmp = matdiagmatprod()
-	U_pinv = np.linalg.pinv(U)
-	ATU = sops.AT@U
-	Vt = V.T
-	for iter_v in range(dir_maxit):
-		if printout: print(f"V direction iteration {iter_v}")
-		VtA = Vt@sops.A
-		#Vprev=Vt ###
-		Vt = c*(U_pinv@ATU)@VtA - c*mdmp.DDD(U_pinv, ATU, VtA) + c*U_pinv@sops.offATA
-		#print(f"||V_new - V||_F = {np.linalg.norm(Vt-Vprev)}") ###
-		#print(f"||U||_C * ||U^+||_C = {np.max(np.abs(U)) * np.max(np.abs(U_pinv))}") ###
-		print(f"c(V.T) = {cwl2(Vt)}")
-	VtA = Vt@sops.A
-	Vt_pinv = np.linalg.pinv(Vt)
-	for iter_u in range(dir_maxit):
-		if printout: print(f"U direction iteration {iter_u}")
-		ATU = sops.AT@U
-		#Uprev = U
-		U = c*ATU@(VtA@Vt_pinv) - c*dmmp.DDD(ATU, VtA, Vt_pinv) + c*sops.offATA@Vt_pinv
-		#print(f"||U_new - U||_F = {np.linalg.norm(U-Uprev)}") ###
-		#print(f"||Vt||_C * ||Vt^+||_C = {np.max(np.abs(Vt)) * np.max(np.abs(Vt_pinv))}") ###
-		print(f"c(U.T) = {cwl2(U.T)}")
-	print(f"c(U)c(V.T) = {cwl2(U)*cwl2(Vt)}")
-	return U,Vt.T
-
-def ANE(U, V, A, c, dir_maxit, printout): #Alternating normal equations
-	#NOTE: initial guess in CGNR is important here! zeros gives much better solution than taking solution from prev global step
-	if printout: print(f"Starting ANE solver (CGNR)...")
-	Vt = V.T
-	simrank_operators = simrank_ops(A, c)
-	rhs = c*simrank_operators.off(A.T@A)
-	if printout: print(f"V direction iterations (U fixed) :")
-	mv = lambda Y: simrank_operators.F_hat_U(Y, U)
-	mvconj = lambda Y: simrank_operators.F_hat_U_conj(Y, U)
-	Vt = CGNR(mv, mvconj, np.zeros((Vt.shape[0],Vt.shape[1])), rhs, simrank_operators.mat_inner, dir_maxit, printout=True)
+	save_iteration = lambda iteration : iterdata.saveval(iteration, "iteration", printout)
+	save_diffV = lambda val : iterdata.saveval(val, "AltMin_V_difference_Frobenius", printout)
+	save_diffU = lambda val : iterdata.saveval(val, "AltMin_U_difference_Frobenius", printout)
+	if compute_full_matrix : 
+		save_diffM = lambda val : iterdata.saveval(val, "AltMin _U@V.T_difference_Frobenius", printout)
 	
-	if printout: print(f"U direction iterations (V fixed) :")
-	mv = lambda Y: simrank_operators.F_hat_Vt(Y, Vt)
-	mvconj = lambda Y: simrank_operators.F_hat_Vt_conj(Y, Vt)
-	U = CGNR(mv, mvconj, np.zeros((U.shape[0],U.shape[1])), rhs, simrank_operators.mat_inner, dir_maxit, printout=True)
-	return U,Vt.T
-
-def AltOpt(A, c, r, solver, maxiter=100, dir_maxit=1, eps_fro = 1e-15, eps_cheb = 1e-12, printout = False): #Main alternating optimiztion function.
-
-	iterdata = iterations_data()
 	n = A.shape[1]
 	np.random.seed(42)
 	U = np.random.randn(n,r)
 	V = np.random.randn(n,r)
-	#U = np.ones((n,r))*0.9
-	#V = np.ones((n,r))*0.9
-	#U = np.eye(n)[:,:r]*0.9
-	#V = np.eye(n)[:,:r]*0.9
-	#cATA = c*A.T@A
-	#np.fill_diagonal(cATA, 0.0)
-	#U, s, VH = np.linalg.svd(cATA, full_matrices = False)
-	#U = ( U@np.sqrt(np.diag(s)) )[:,:r]
-	#V = ( ( np.sqrt(np.diag(s))@VH )[:r,:] ).T
 	
 	st = time.time()
 	
@@ -363,19 +294,36 @@ def AltOpt(A, c, r, solver, maxiter=100, dir_maxit=1, eps_fro = 1e-15, eps_cheb 
 		V_prev = V
 		U_prev = U
 		U, V = solver(U, V, A, c, dir_maxit, False)
-		diff =U@V.T - U_prev@V_prev.T
-		err_fro = (np.linalg.norm(diff, ord = 'fro'))
-		iterdata(err_fro)
-		print(f"||U^(k+1)@V^(k+1).T - U^(k)@V^(k).T||_C at iter {k} = {np.max(np.abs(diff))}")
-		'''
-		if  err_fro < eps_fro:
-			if printout: print("Converged by err Fro")
+		diffV = V - V_prev
+		diffU = U - U_prev
+		err_diffV_fro = (np.linalg.norm(diffV, ord = 'fro'))
+		err_diffU_fro = (np.linalg.norm(diffU, ord = 'fro'))
+		save_iteration(k)
+		save_diffV(err_diffV_fro)
+		save_diffU(err_diffU_fro)
+		if printout : print(f"||V^(k+1) -V^(k)||_F at iter {k} = {err_diffV_fro}")
+		if printout : print(f"||U^(k+1) -U^(k)||_F at iter {k} = {err_diffU_fro}")
+		if  err_diffV_fro < eps_fro:
+			if printout: print("Converged by V shift err Fro")
 			break
-		if np.max(np.abs(diff)) < eps_cheb:
-			if printout: print("Converged by err Cheb")
+		if  err_diffU_fro < eps_fro:
+			if printout: print("Converged by U shift err Fro")
 			break
-			'''
-	elapsed = time.time() - st
-	print(f"Elapsed {elapsed}")
-	solutiondata = [iterdata.iterations, iterdata.residuals, elapsed]
-	return np.eye(n)+U@V.T, solutiondata
+			
+		if compute_full_matrix :
+			diffM = U@V.T - U_prev@V_prev.T
+			err_diffM_fro = (np.linalg.norm(diffM, ord = 'fro'))
+			err_diffM_cheb = np.max(np.abs(diffM))
+			save_diffM(err_diffM_fro)
+			if printout : print(f"||U^(k+1)@V^(k+1).T - U^(k)@V^(k).T||_C at iter {k} = {err_diffM_cheb}")
+			
+			if  err_diffM_fro < eps_fro:
+				if printout: print("Converged by U@V.T err Fro")
+				break
+			if err_diffM_cheb < eps_cheb:
+				if printout: print("Converged by U@V.T err Cheb")
+				break
+
+	iterdata.elapsed = time.time() - st
+	print(f"Elapsed {iterdata.elapsed}")
+	return U,V, iterdata

@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --output=../cout/run_solver_%j.out
+#SBATCH --error=../cout/run_solver_%j.err
+
+export OMP_PROC_BIND="spread"
+export OMP_PLACES="cores"
+
+export OMP_NUM_THREADS=36
+
+ranks="100,800,100"
+
+python3 -u collect_solutions.py -tn eumail -sl QMin_Newton -rk $ranks -it 100
