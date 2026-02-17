@@ -38,6 +38,7 @@ def Solve(acc, m_Krylov, rank, k_iter_max, taskname, A, c, solver, optimize): #s
 	print("Adjacency matrix:")
 	print(A)
 	
+	printout=True
 	tau=1.
 	n = A.shape[0]
 	I = np.eye(n)

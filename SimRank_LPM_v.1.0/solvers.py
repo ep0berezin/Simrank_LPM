@@ -35,7 +35,7 @@ def FixedPointIter(LinOp, tau, x_0, b, k_max, printout, eps = 1e-13):
 			break
 	et = time.time()
 	iterdata.elapsed = et - st
-	if printout: print(f"Average iteration time: {elapsed/iterdata.iterations[-1]} s")
+	if printout: print(f"Average iteration time: {iterdata.elapsed/iterdata.values['iteration'][-1]} s")
 	if printout: print(f"Elapsed: {iterdata.elapsed} s")
 	return s, iterdata
 #---
@@ -79,13 +79,11 @@ def GMRES_m(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 	r = b - LinOp(x_0)
 	r_norm2 = np.linalg.norm(r, ord = 2)
 	relres = r_norm2/np.linalg.norm(b, ord = 2)
-	iterdata_vals_types = ["iteration", "relative_residual", "restart"]
+	iterdata_vals_types = ["iteration", "relative_residual"]
 	iterdata = iterations_data(iterdata_vals_types)
 	save_residual = lambda val : iterdata.saveval(val, "relative_residual", printout)
 	save_iteration = lambda iteration : iterdata.saveval(iteration, "iteration", printout)
-	save_restart = lambda restart: iterdata.saveval(restart, "restart", printout)
 	save_iteration(0)
-	save_restart(0)
 	save_residual(relres)
 	st = time.time()
 	x = x_0
@@ -100,7 +98,6 @@ def GMRES_m(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 		V_list = [np.zeros(N)] #Stores columns of V matrix
 		V_list[0] = r.reshape(-1, order='F')/beta
 		H_list = [np.zeros(m_Krylov)] #Stores rows of Hessenberg matrix
-		save_restart(k)
 		for m in range(1,m_Krylov+1):
 			st_iter = time.time()
 			V_list.append(np.zeros(N)) #Reserving space for vector (column of V) v_{j+1}
@@ -130,7 +127,7 @@ def GMRES_m(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 		if printout: print("Restart time:", et_restart - st_restart)
 	et = time.time()
 	iterdata.elapsed = et - st
-	if printout: print(f"Average iteration time: {elapsed/iterdata.values['iteration'][-1]} s")
+	if printout: print(f"Average iteration time: {iterdata.elapsed/iterdata.values['iteration'][-1]} s")
 	if printout: print(f"GMRES(m) time: {iterdata.elapsed} s")
 	return x, iterdata
 #---
@@ -138,7 +135,7 @@ def GMRES_m(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 #---GMRES SciPy ver---
 
 def GMRES_scipy_callback(relres, iterdata, printout):
-	iteration = len(iterdata["relative_residual"])
+	iteration = len(iterdata.values["relative_residual"])
 	iterdata.saveval(iteration, "iteration", printout)
 	iterdata.saveval(relres, "relative_residual", printout) 
 	return relres
@@ -149,13 +146,13 @@ def GMRES_scipy(LinOp, m_Krylov, x_0, b, k_max, eps = 1e-13, printout = False):
 	iterdata = iterations_data(iterdata_vals_types)
 	save_residual = lambda val : GMRES_scipy_callback(val, iterdata, printout)
 	r = b - LinOp(x_0) #initial residual
-	iterdata(np.linalg.norm(r, ord = 2)/np.linalg.norm(b, ord = 2), printout)
+	GMRES_scipy_callback(np.linalg.norm(r, ord = 2)/np.linalg.norm(b, ord = 2), iterdata, printout)
 	G = scsp.linalg.LinearOperator((N,N), matvec = LinOp)
 	st = time.time()
 	s, data = scsp.linalg.gmres(G, b, x0=x_0, atol=eps, restart=m_Krylov, maxiter=None, M=None, callback=save_residual, callback_type='legacy')
 	et = time.time()
 	iterdata.elapsed = et - st
-	if printout: print("Average iteration time:", elapsed/iterdata.iterations[-1])
+	if printout: print(f"Average iteration time: {iterdata.elapsed/iterdata.values['iteration'][-1]} s")
 	if printout: print("Elapsed:", iterdata.elapsed)
 	if printout: print("Solution:", s)
 	return s, iterdata
